@@ -15,6 +15,7 @@ model Stipendium {
   beloppMax    Int?
   deadline     DateTime?
   kategorier   String[]
+  målgrupp     String[]
   url          String?
   aktiv        Boolean   @default(true)
   createdAt    DateTime  @default(now())

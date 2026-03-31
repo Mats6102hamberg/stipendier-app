@@ -1,6 +1,9 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { unstable_cache } from "next/cache";
+
+export type SortOrder = "deadline" | "belopp" | "namn";
 
 export type StipendiumResult = {
   id: string;
@@ -11,18 +14,35 @@ export type StipendiumResult = {
   beloppMax: number | null;
   deadline: Date | null;
   kategorier: string[];
+  målgrupp: string[];
   url: string | null;
 };
 
 export async function sokStipendier(params: {
   query?: string;
   kategori?: string;
+  målgrupp?: string;
   minBelopp?: number;
   visaUtgångna?: boolean;
+  sortering?: SortOrder;
 }): Promise<StipendiumResult[]> {
-  const { query, kategori, minBelopp, visaUtgångna } = params;
+  const {
+    query,
+    kategori,
+    målgrupp,
+    minBelopp,
+    visaUtgångna,
+    sortering = "deadline",
+  } = params;
 
   const now = new Date();
+
+  const orderBy =
+    sortering === "belopp"
+      ? [{ belopp: "desc" as const }]
+      : sortering === "namn"
+        ? [{ namn: "asc" as const }]
+        : [{ deadline: "asc" as const }];
 
   const results = await prisma.stipendium.findMany({
     where: {
@@ -34,32 +54,52 @@ export async function sokStipendier(params: {
           { beskrivning: { contains: query, mode: "insensitive" } },
         ],
       }),
-      ...(kategori && {
-        kategorier: { has: kategori },
-      }),
-      ...(minBelopp && {
-        belopp: { gte: minBelopp },
-      }),
+      ...(kategori && { kategorier: { has: kategori } }),
+      ...(målgrupp && { målgrupp: { has: målgrupp } }),
+      ...(minBelopp && { belopp: { gte: minBelopp } }),
       ...(!visaUtgångna && {
         OR: [{ deadline: null }, { deadline: { gte: now } }],
       }),
     },
-    orderBy: [{ deadline: "asc" }, { belopp: "desc" }],
-    take: 50,
+    orderBy,
+    take: 100,
   });
 
   return results;
 }
 
-export async function allaKategorier(): Promise<string[]> {
-  const stipendier = await prisma.stipendium.findMany({
-    select: { kategorier: true },
-    where: { aktiv: true },
-  });
+export const allaKategorier = unstable_cache(
+  async (): Promise<string[]> => {
+    const stipendier = await prisma.stipendium.findMany({
+      select: { kategorier: true },
+      where: { aktiv: true },
+    });
+    const alla: string[] = stipendier.flatMap(
+      (s: { kategorier: string[] }) => s.kategorier
+    );
+    return Array.from(new Set(alla)).sort();
+  },
+  ["alla-kategorier"],
+  { revalidate: 3600 }
+);
 
-  const alla: string[] = stipendier.flatMap(
-    (s: { kategorier: string[] }) => s.kategorier
-  );
-  const unika: string[] = Array.from(new Set(alla)).sort();
-  return unika;
+export const allaMålgrupper = unstable_cache(
+  async (): Promise<string[]> => {
+    const stipendier = await prisma.stipendium.findMany({
+      select: { målgrupp: true },
+      where: { aktiv: true },
+    });
+    const alla: string[] = stipendier.flatMap(
+      (s: { målgrupp: string[] }) => s.målgrupp
+    );
+    return Array.from(new Set(alla)).sort();
+  },
+  ["alla-malgrupper"],
+  { revalidate: 3600 }
+);
+
+export async function hamtaStipendium(
+  id: string
+): Promise<StipendiumResult | null> {
+  return prisma.stipendium.findUnique({ where: { id, aktiv: true } });
 }
