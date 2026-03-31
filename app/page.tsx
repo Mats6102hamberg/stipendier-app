@@ -1,4 +1,6 @@
 import { Suspense } from "react";
+
+export const dynamic = "force-dynamic";
 import { sokStipendier, allaKategorier } from "@/app/actions";
 import SokFilter from "@/app/components/SokFilter";
 import StipendiumKort from "@/app/components/StipendiumKort";
