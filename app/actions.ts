@@ -1,7 +1,6 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { unstable_cache } from "next/cache";
 
 export type SortOrder = "deadline" | "belopp" | "namn";
 
@@ -68,35 +67,27 @@ export async function sokStipendier(params: {
   return results;
 }
 
-export const allaKategorier = unstable_cache(
-  async (): Promise<string[]> => {
-    const stipendier = await prisma.stipendium.findMany({
-      select: { kategorier: true },
-      where: { aktiv: true },
-    });
-    const alla: string[] = stipendier.flatMap(
-      (s: { kategorier: string[] }) => s.kategorier
-    );
-    return Array.from(new Set(alla)).sort();
-  },
-  ["alla-kategorier"],
-  { revalidate: 3600 }
-);
+export async function allaKategorier(): Promise<string[]> {
+  const stipendier = await prisma.stipendium.findMany({
+    select: { kategorier: true },
+    where: { aktiv: true },
+  });
+  const alla: string[] = stipendier.flatMap(
+    (s: { kategorier: string[] }) => s.kategorier
+  );
+  return Array.from(new Set(alla)).sort();
+}
 
-export const allaMålgrupper = unstable_cache(
-  async (): Promise<string[]> => {
-    const stipendier = await prisma.stipendium.findMany({
-      select: { målgrupp: true },
-      where: { aktiv: true },
-    });
-    const alla: string[] = stipendier.flatMap(
-      (s: { målgrupp: string[] }) => s.målgrupp
-    );
-    return Array.from(new Set(alla)).sort();
-  },
-  ["alla-malgrupper"],
-  { revalidate: 3600 }
-);
+export async function allaMålgrupper(): Promise<string[]> {
+  const stipendier = await prisma.stipendium.findMany({
+    select: { målgrupp: true },
+    where: { aktiv: true },
+  });
+  const alla: string[] = stipendier.flatMap(
+    (s: { målgrupp: string[] }) => s.målgrupp
+  );
+  return Array.from(new Set(alla)).sort();
+}
 
 export async function hamtaStipendium(
   id: string
