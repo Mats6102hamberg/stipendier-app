@@ -57,7 +57,7 @@ export async function allaKategorier(): Promise<string[]> {
     where: { aktiv: true },
   });
 
-  const alla = stipendier.flatMap((s) => s.kategorier);
+  const alla = stipendier.flatMap((s: { kategorier: string[] }) => s.kategorier);
   const unika = [...new Set(alla)].sort();
   return unika;
 }
