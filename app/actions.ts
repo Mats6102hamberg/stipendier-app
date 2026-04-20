@@ -22,16 +22,20 @@ export async function sokStipendier(params: {
   kategori?: string;
   målgrupp?: string;
   minBelopp?: number;
+  maxBelopp?: number;
   visaUtgångna?: boolean;
   sortering?: SortOrder;
+  land?: string;
 }): Promise<StipendiumResult[]> {
   const {
     query,
     kategori,
     målgrupp,
     minBelopp,
+    maxBelopp,
     visaUtgångna,
     sortering = "deadline",
+    land = "SE",
   } = params;
 
   const now = new Date();
@@ -46,6 +50,7 @@ export async function sokStipendier(params: {
   const results = await prisma.stipendium.findMany({
     where: {
       aktiv: true,
+      land,
       ...(query && {
         OR: [
           { namn: { contains: query, mode: "insensitive" } },
@@ -56,6 +61,7 @@ export async function sokStipendier(params: {
       ...(kategori && { kategorier: { has: kategori } }),
       ...(målgrupp && { målgrupp: { has: målgrupp } }),
       ...(minBelopp && { belopp: { gte: minBelopp } }),
+      ...(maxBelopp && { belopp: { lte: maxBelopp } }),
       ...(!visaUtgångna && {
         OR: [{ deadline: null }, { deadline: { gte: now } }],
       }),

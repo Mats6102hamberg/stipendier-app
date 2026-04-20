@@ -1,34 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useFavoriter } from "@/hooks/useFavoriter";
 import type { StipendiumResult } from "@/app/actions";
-
-function formatBelopp(belopp: number | null, beloppMax: number | null) {
-  if (!belopp && belopp !== 0) return null;
-  const fmt = (n: number) =>
-    n === 0 ? "Varierar" : n.toLocaleString("sv-SE") + " kr";
-  if (beloppMax && beloppMax > belopp)
-    return `${fmt(belopp)} – ${fmt(beloppMax)}`;
-  return fmt(belopp);
-}
-
-function deadlineInfo(deadline: Date | null): { text: string; cls: string } {
-  if (!deadline) return { text: "Ingen deadline", cls: "text-gray-400" };
-  const dagKvar = Math.ceil(
-    (new Date(deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  );
-  const text = new Date(deadline).toLocaleDateString("sv-SE", {
-    year: "numeric", month: "long", day: "numeric",
-  });
-  if (dagKvar < 0) return { text, cls: "text-red-400 line-through" };
-  if (dagKvar <= 14) return { text: `⚡ ${text} (${dagKvar} dagar kvar)`, cls: "text-orange-500 font-semibold" };
-  if (dagKvar <= 30) return { text, cls: "text-orange-400 font-medium" };
-  return { text, cls: "text-green-600" };
-}
+import { formatBelopp, deadlineInfo } from "@/lib/format";
 
 export default function StipendiumKort({ s }: { s: StipendiumResult }) {
   const { favoriter, toggleFavorit } = useFavoriter();
+  const [kopierat, setKopierat] = useState(false);
   const ärFavorit = favoriter.includes(s.id);
   const belopp = formatBelopp(s.belopp, s.beloppMax);
   const dl = deadlineInfo(s.deadline);
@@ -37,7 +17,8 @@ export default function StipendiumKort({ s }: { s: StipendiumResult }) {
     e.preventDefault();
     const url = `${window.location.origin}/stipendier/${s.id}`;
     navigator.clipboard.writeText(url).then(() => {
-      // Enkel feedback via title-attribut
+      setKopierat(true);
+      setTimeout(() => setKopierat(false), 2000);
     });
   }
 
@@ -78,9 +59,7 @@ export default function StipendiumKort({ s }: { s: StipendiumResult }) {
       </div>
 
       <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-50">
-        <span className={`text-xs ${dl.cls}`}>
-          {dl.text}
-        </span>
+        <span className={`text-xs ${dl.cls}`}>{dl.text}</span>
         <div className="flex items-center gap-2">
           <button
             onClick={(e) => { e.preventDefault(); toggleFavorit(s.id); }}
@@ -92,9 +71,13 @@ export default function StipendiumKort({ s }: { s: StipendiumResult }) {
           <button
             onClick={dela}
             title="Kopiera länk"
-            className="text-xs text-gray-400 hover:text-gray-600 transition"
+            className={`text-xs transition px-2 py-0.5 rounded-full ${
+              kopierat
+                ? "bg-green-100 text-green-600 font-medium"
+                : "text-gray-400 hover:text-gray-600"
+            }`}
           >
-            🔗
+            {kopierat ? "✓ Kopierat!" : "🔗"}
           </button>
         </div>
       </div>

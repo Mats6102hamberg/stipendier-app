@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useTransition, useState, useEffect } from "react";
+import { useTransition, useState, useEffect, useRef, useCallback } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
 import type { SortOrder } from "@/app/actions";
+import { useT } from "@/lib/i18n";
 
 const SNABB_KATEGORIER = [
   "teknik", "forskning", "internationell", "medicin", "kultur", "utbyte",
@@ -18,11 +20,14 @@ export default function SokFilter({ kategorier, målgrupper }: Props) {
   const router = useRouter();
   const params = useSearchParams();
   const [pending, startTransition] = useTransition();
+  const mounted = useRef(false);
+  const tr = useT(params.get("land"));
 
   const [query, setQuery] = useState(params.get("q") ?? "");
   const [kategori, setKategori] = useState(params.get("kat") ?? "");
   const [målgrupp, setMålgrupp] = useState(params.get("mg") ?? "");
   const [minBelopp, setMinBelopp] = useState(params.get("min") ?? "");
+  const [maxBelopp, setMaxBelopp] = useState(params.get("max") ?? "");
   const [sortering, setSortering] = useState<SortOrder>(
     (params.get("sort") as SortOrder) ?? "deadline"
   );
@@ -32,35 +37,62 @@ export default function SokFilter({ kategorier, målgrupper }: Props) {
 
   const debouncedQuery = useDebounce(query, 400);
 
-  // Auto-sök när debouncat query ändras
+  const byggUrl = useCallback(
+    (overrides: Partial<Record<string, string>> = {}) => {
+      const p = new URLSearchParams();
+      const land = params.get("land");
+      const vals: Record<string, string> = {
+        q: query,
+        kat: kategori,
+        mg: målgrupp,
+        min: minBelopp,
+        max: maxBelopp,
+        sort: sortering,
+        utgångna: visaUtgångna ? "1" : "",
+        ...(land ? { land } : {}),
+        ...overrides,
+      };
+      Object.entries(vals).forEach(([k, v]) => { if (v) p.set(k, v); });
+      const str = p.toString();
+      return str ? `/?${str}` : "/";
+    },
+    [query, kategori, målgrupp, minBelopp, maxBelopp, sortering, visaUtgångna, params]
+  );
+
+  // Stale-closure fix: kör ej på initial mount, använd debouncedQuery explicit
   useEffect(() => {
-    navigera({ q: debouncedQuery });
+    if (!mounted.current) { mounted.current = true; return; }
+    const p = new URLSearchParams();
+    const land = params.get("land");
+    const vals: Record<string, string> = {
+      q: debouncedQuery,
+      kat: kategori,
+      mg: målgrupp,
+      min: minBelopp,
+      max: maxBelopp,
+      sort: sortering,
+      utgångna: visaUtgångna ? "1" : "",
+      ...(land ? { land } : {}),
+    };
+    Object.entries(vals).forEach(([k, v]) => { if (v) p.set(k, v); });
+    const str = p.toString();
+    startTransition(() => router.push(str ? `/?${str}` : "/"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery]);
 
   function navigera(overrides: Partial<Record<string, string>> = {}) {
-    const p = new URLSearchParams();
-    const vals: Record<string, string> = {
-      q: query,
-      kat: kategori,
-      mg: målgrupp,
-      min: minBelopp,
-      sort: sortering,
-      utgångna: visaUtgångna ? "1" : "",
-      ...overrides,
-    };
-    Object.entries(vals).forEach(([k, v]) => { if (v) p.set(k, v); });
-    startTransition(() => router.push(`/?${p.toString()}`));
+    startTransition(() => router.push(byggUrl(overrides)));
   }
 
   function rensa() {
     setQuery(""); setKategori(""); setMålgrupp("");
-    setMinBelopp(""); setSortering("deadline"); setVisaUtgångna(false);
-    startTransition(() => router.push("/"));
+    setMinBelopp(""); setMaxBelopp(""); setSortering("deadline"); setVisaUtgångna(false);
+    const land = params.get("land");
+    startTransition(() => router.push(land ? `/?land=${land}` : "/"));
   }
 
   const harAktivFilter =
-    query || kategori || målgrupp || minBelopp || visaUtgångna;
+    query || kategori || målgrupp || minBelopp || maxBelopp || visaUtgångna;
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-4">
@@ -71,10 +103,10 @@ export default function SokFilter({ kategorier, målgrupper }: Props) {
         </svg>
         <input
           type="text"
-          placeholder="Sök på namn, organisation, nyckelord..."
+          placeholder={tr.searchPlaceholder}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
         />
         {pending && (
           <div className="absolute right-3 top-3 h-4 w-4 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
@@ -83,19 +115,26 @@ export default function SokFilter({ kategorier, målgrupper }: Props) {
 
       {/* Snabb-taggar */}
       <div className="flex flex-wrap gap-2">
-        {SNABB_KATEGORIER.map((k) => (
-          <button
-            key={k}
-            onClick={() => { setKategori(k === kategori ? "" : k); navigera({ kat: k === kategori ? "" : k }); }}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition ${
-              kategori === k
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            {k}
-          </button>
-        ))}
+        {SNABB_KATEGORIER.map((k) => {
+          const aktiv = kategori === k;
+          return (
+            <button
+              key={k}
+              onClick={() => {
+                const nästa = aktiv ? "" : k;
+                setKategori(nästa);
+                navigera({ kat: nästa });
+              }}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition ${
+                aktiv
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {k}
+            </button>
+          );
+        })}
       </div>
 
       {/* Filter-rad */}
@@ -105,7 +144,7 @@ export default function SokFilter({ kategorier, målgrupper }: Props) {
           onChange={(e) => { setKategori(e.target.value); navigera({ kat: e.target.value }); }}
           className="flex-1 min-w-[140px] px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
         >
-          <option value="">Alla kategorier</option>
+          <option value="">{tr.allCategories}</option>
           {kategorier.map((k) => (
             <option key={k} value={k}>{k.charAt(0).toUpperCase() + k.slice(1)}</option>
           ))}
@@ -116,7 +155,7 @@ export default function SokFilter({ kategorier, målgrupper }: Props) {
           onChange={(e) => { setMålgrupp(e.target.value); navigera({ mg: e.target.value }); }}
           className="flex-1 min-w-[140px] px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
         >
-          <option value="">Alla målgrupper</option>
+          <option value="">{tr.allTargetGroups}</option>
           {målgrupper.map((m) => (
             <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>
           ))}
@@ -127,11 +166,23 @@ export default function SokFilter({ kategorier, målgrupper }: Props) {
           onChange={(e) => { setMinBelopp(e.target.value); navigera({ min: e.target.value }); }}
           className="flex-1 min-w-[120px] px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
         >
-          <option value="">Alla belopp</option>
-          <option value="5000">Minst 5 000 kr</option>
-          <option value="10000">Minst 10 000 kr</option>
-          <option value="20000">Minst 20 000 kr</option>
-          <option value="50000">Minst 50 000 kr</option>
+          <option value="">{tr.minAmount}</option>
+          <option value="5000">{tr.minAmountLabel("5 000")}</option>
+          <option value="10000">{tr.minAmountLabel("10 000")}</option>
+          <option value="20000">{tr.minAmountLabel("20 000")}</option>
+          <option value="50000">{tr.minAmountLabel("50 000")}</option>
+        </select>
+
+        <select
+          value={maxBelopp}
+          onChange={(e) => { setMaxBelopp(e.target.value); navigera({ max: e.target.value }); }}
+          className="flex-1 min-w-[120px] px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+        >
+          <option value="">{tr.maxAmount}</option>
+          <option value="10000">{tr.maxAmountLabel("10 000")}</option>
+          <option value="25000">{tr.maxAmountLabel("25 000")}</option>
+          <option value="50000">{tr.maxAmountLabel("50 000")}</option>
+          <option value="100000">{tr.maxAmountLabel("100 000")}</option>
         </select>
 
         <select
@@ -139,9 +190,9 @@ export default function SokFilter({ kategorier, målgrupper }: Props) {
           onChange={(e) => { const v = e.target.value as SortOrder; setSortering(v); navigera({ sort: v }); }}
           className="flex-1 min-w-[130px] px-3 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
         >
-          <option value="deadline">Sortера: Deadline</option>
-          <option value="belopp">Sortera: Belopp</option>
-          <option value="namn">Sortera: Namn A–Ö</option>
+          <option value="deadline">{tr.sortDeadline}</option>
+          <option value="belopp">{tr.sortAmount}</option>
+          <option value="namn">{tr.sortName}</option>
         </select>
       </div>
 
@@ -154,13 +205,21 @@ export default function SokFilter({ kategorier, målgrupper }: Props) {
             onChange={(e) => { setVisaUtgångna(e.target.checked); navigera({ utgångna: e.target.checked ? "1" : "" }); }}
             className="rounded"
           />
-          Visa även utgångna deadlines
+          {tr.showExpired}
         </label>
-        {harAktivFilter && (
-          <button onClick={rensa} className="text-xs text-gray-400 hover:text-gray-600 transition underline">
-            Rensa filter
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          <Link
+            href="/favoriter"
+            className="text-xs text-gray-400 hover:text-yellow-500 transition"
+          >
+            {tr.favorites}
+          </Link>
+          {harAktivFilter && (
+            <button onClick={rensa} className="text-xs text-gray-400 hover:text-gray-600 transition underline">
+              {tr.clearFilter}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

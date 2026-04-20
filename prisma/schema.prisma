@@ -7,7 +7,7 @@ datasource db {
 }
 
 model Stipendium {
-  id           String    @id @default(cuid())
+  id           String      @id @default(cuid())
   namn         String
   organisation String
   beskrivning  String
@@ -17,9 +17,63 @@ model Stipendium {
   kategorier   String[]
   målgrupp     String[]
   url          String?
-  aktiv        Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  land         String      @default("SE")
+  aktiv        Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  bevakningar  Bevakning[]
 
   @@index([deadline])
+  @@index([land])
+}
+
+model Subscriber {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  accessToken      String    @unique @default(cuid())
+  stripeCustomerId String?
+  status           String    @default("free")
+  currentPeriodEnd DateTime?
+  plan             String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([accessToken])
+}
+
+model Newsletter {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  ämne      String?
+  nivå      String?
+  intressen String?
+  aktiv     Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model Bevakning {
+  id           String    @id @default(cuid())
+  email        String
+  stipendiumId String
+  stipendium   Stipendium @relation(fields: [stipendiumId], references: [id], onDelete: Cascade)
+  skickad      Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+
+  @@unique([email, stipendiumId])
+  @@index([skickad, stipendiumId])
+}
+
+model ProcessedStripeEvent {
+  eventId   String   @id
+  type      String
+  createdAt DateTime @default(now())
+}
+
+model AiUsage {
+  id           String   @id @default(cuid())
+  subscriberId String
+  endpoint     String
+  createdAt    DateTime @default(now())
+
+  @@index([subscriberId, createdAt])
 }
