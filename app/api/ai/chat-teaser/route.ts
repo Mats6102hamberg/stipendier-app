@@ -7,6 +7,11 @@ const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 const MAX_PER_IP = 1;
 
+// Globalt skydd: max 100 teaser-anrop per timme över alla IP:n
+// Hindrar botnät-attacker från att skena kostnaden (1000 RPM hos Anthropic = 72 000 kr/dag)
+const GLOBAL_WINDOW_MS = 60 * 60 * 1000;
+const GLOBAL_MAX = 100;
+
 function getIp(req: NextRequest): string {
   const fwd = req.headers.get("x-forwarded-for");
   if (fwd) return fwd.split(",")[0].trim();
@@ -50,11 +55,27 @@ Svara alltid på svenska. Håll det kompakt — max 2 stycken + stipendielista.`
 export async function POST(req: NextRequest) {
   const ip = getIp(req);
   const sedan = new Date(Date.now() - WINDOW_MS);
+  const globalSedan = new Date(Date.now() - GLOBAL_WINDOW_MS);
 
-  const count = await prisma.aiUsage.count({
-    where: { subscriberId: `ip:${ip}`, endpoint: "ai/chat-teaser", createdAt: { gte: sedan } },
-  });
-  if (count >= MAX_PER_IP) {
+  // Parallell check: per-IP och global
+  const [ipCount, globalCount] = await Promise.all([
+    prisma.aiUsage.count({
+      where: { subscriberId: `ip:${ip}`, endpoint: "ai/chat-teaser", createdAt: { gte: sedan } },
+    }),
+    prisma.aiUsage.count({
+      where: { endpoint: "ai/chat-teaser", createdAt: { gte: globalSedan } },
+    }),
+  ]);
+
+  if (globalCount >= GLOBAL_MAX) {
+    console.warn(`[chat-teaser] global cap nådd (${globalCount}/${GLOBAL_MAX} senaste timmen)`);
+    return Response.json(
+      { error: "Tillfälligt hög belastning. Försök igen om en stund eller uppgradera till Premium." },
+      { status: 429 },
+    );
+  }
+
+  if (ipCount >= MAX_PER_IP) {
     return Response.json(
       { error: "Teaser-kvoten är slut. Uppgradera till Premium för obegränsade frågor." },
       { status: 402 },
