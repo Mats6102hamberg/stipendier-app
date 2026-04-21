@@ -12,9 +12,12 @@ export async function POST(req: NextRequest) {
   }
 
   const stripe = getStripe();
-  const priceId = plan === "yearly"
-    ? process.env.STRIPE_PRICE_ID_YEARLY!
-    : process.env.STRIPE_PRICE_ID_MONTHLY!;
+  const priceId =
+    plan === "yearly"
+      ? process.env.STRIPE_PRICE_ID_YEARLY!
+      : plan === "quarterly"
+        ? process.env.STRIPE_PRICE_ID_QUARTERLY!
+        : process.env.STRIPE_PRICE_ID_MONTHLY!;
 
   // Hämta eller skapa subscriber (atomiskt — undviker dubletter vid samtidiga anrop)
   let subscriber = await prisma.subscriber.upsert({

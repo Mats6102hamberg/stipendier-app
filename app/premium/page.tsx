@@ -22,7 +22,7 @@ const PREMIUM = [
 export default function PremiumSida() {
   const { premium, email: sparadEmail } = usePremium();
   const [email, setEmail] = useState(sparadEmail ?? "");
-  const [plan, setPlan] = useState<"monthly" | "yearly">("yearly");
+  const [plan, setPlan] = useState<"monthly" | "quarterly" | "yearly">("yearly");
   const [laddar, setLaddar] = useState(false);
   const [fel, setFel] = useState("");
 
@@ -60,7 +60,14 @@ export default function PremiumSida() {
     );
   }
 
-  const månadsKostnad = plan === "yearly" ? Math.round(599 / 12) : 79;
+  const månadsKostnad =
+    plan === "yearly" ? Math.round(599 / 12) : plan === "quarterly" ? Math.round(199 / 3) : 79;
+  const fakturaText =
+    plan === "yearly"
+      ? "Faktureras 599 kr/år — spara 350 kr"
+      : plan === "quarterly"
+        ? "En engångsbetalning på 199 kr för 3 mån — spara 38 kr"
+        : "Faktureras månadsvis";
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-50">
@@ -101,10 +108,7 @@ export default function PremiumSida() {
               <p className="text-3xl font-bold">{månadsKostnad} kr</p>
               <p className="text-blue-200 text-sm mb-1">/månad</p>
             </div>
-            {plan === "yearly" && (
-              <p className="text-blue-200 text-xs mb-4">Faktureras 599 kr/år — spara 350 kr</p>
-            )}
-            {plan === "monthly" && <p className="text-blue-200 text-xs mb-4">Faktureras månadsvis</p>}
+            <p className="text-blue-200 text-xs mb-4">{fakturaText}</p>
             <ul className="space-y-2">
               {PREMIUM.map((f) => (
                 <li key={f} className="flex items-start gap-2 text-sm text-blue-50">
@@ -120,11 +124,12 @@ export default function PremiumSida() {
           <h3 className="font-semibold text-gray-800 mb-4">Välj plan och betala</h3>
 
           {/* Planval */}
-          <div className="grid grid-cols-2 gap-2 mb-4">
+          <div className="grid grid-cols-3 gap-2 mb-4">
             {([
-              { val: "yearly", label: "Årsvis", pris: "599 kr/år", spara: "Spara 350 kr" },
-              { val: "monthly", label: "Månadsvis", pris: "79 kr/mån", spara: null },
-            ] as const).map(({ val, label, pris, spara }) => (
+              { val: "yearly", label: "Årsvis", pris: "599 kr", extra: "per år", spara: "Bäst värde" },
+              { val: "quarterly", label: "3 månader", pris: "199 kr", extra: "engångsavgift", spara: "Spara 38 kr" },
+              { val: "monthly", label: "Månadsvis", pris: "79 kr", extra: "per månad", spara: null },
+            ] as const).map(({ val, label, pris, extra, spara }) => (
               <button
                 key={val}
                 onClick={() => setPlan(val)}
@@ -134,7 +139,8 @@ export default function PremiumSida() {
               >
                 <p className="text-xs font-semibold text-gray-700">{label}</p>
                 <p className="text-sm font-bold text-gray-900">{pris}</p>
-                {spara && <p className="text-xs text-green-600 font-medium">{spara}</p>}
+                <p className="text-[11px] text-gray-500">{extra}</p>
+                {spara && <p className="text-xs text-green-600 font-medium mt-0.5">{spara}</p>}
               </button>
             ))}
           </div>

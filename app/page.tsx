@@ -89,13 +89,28 @@ export default async function Home({
           <p className="text-gray-500 mt-2 text-sm">
             {tr.tagline}
           </p>
-          <a
-            href="/ai"
-            className="inline-flex items-center gap-2 mt-4 px-5 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition shadow-sm"
-          >
-            {tr.aiCta}
-          </a>
         </div>
+
+        {/* AI-hero: stor ingång, gratis första fråga */}
+        <a
+          href="/ai"
+          className="block mb-8 rounded-2xl bg-gradient-to-br from-blue-600 to-blue-700 text-white p-6 shadow-sm hover:shadow-md transition group"
+        >
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold text-blue-200 uppercase tracking-wider mb-1">
+                ✨ AI-rådgivare
+              </p>
+              <h2 className="text-xl font-bold mb-1">
+                Låt AI hitta stipendier som passar just dig
+              </h2>
+              <p className="text-sm text-blue-100">
+                Första frågan är gratis. Beskriv dig själv — få 3–5 träffar på sekunder.
+              </p>
+            </div>
+            <div className="shrink-0 text-2xl group-hover:translate-x-1 transition">→</div>
+          </div>
+        </a>
 
         <ProfilMatchning />
 

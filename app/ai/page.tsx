@@ -45,6 +45,7 @@ export default function AiPage() {
   const [laddar, setLaddar] = useState(false);
   const [matchande, setMatchande] = useState<StipendiumResult[]>([]);
   const [land, setLand] = useState("SE");
+  const [teaserAnvänd, setTeaserAnvänd] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { premium, laddad: premiumLaddad, premiumHeaders } = usePremium();
@@ -52,6 +53,7 @@ export default function AiPage() {
   useEffect(() => {
     const sparatLand = localStorage.getItem("stipendier_land") ?? "SE";
     setLand(sparatLand);
+    setTeaserAnvänd(localStorage.getItem("stipendier_teaser_använd") === "1");
   }, []);
 
   useEffect(() => {
@@ -61,8 +63,22 @@ export default function AiPage() {
   async function skicka(text?: string) {
     const innehåll = text ?? input.trim();
     if (!innehåll || laddar) return;
-    setInput("");
 
+    // Gratis-användare som redan nyttjat teaser → paywall direkt
+    if (!premium && teaserAnvänd) {
+      setMeddelanden([
+        ...meddelanden,
+        { role: "user", content: innehåll },
+        {
+          role: "assistant",
+          content: "Din gratisfråga är använd. [Uppgradera till Premium](/premium) för obegränsade frågor — från 199 kr (3 mån) eller 599 kr (år).",
+        },
+      ]);
+      setInput("");
+      return;
+    }
+
+    setInput("");
     const nyaMeddelanden: Meddelande[] = [
       ...meddelanden,
       { role: "user", content: innehåll },
@@ -71,21 +87,31 @@ export default function AiPage() {
     setLaddar(true);
 
     try {
-      const res = await fetch("/api/ai/chat", {
+      const endpoint = premium ? "/api/ai/chat" : "/api/ai/chat-teaser";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...premiumHeaders() },
         body: JSON.stringify({ messages: nyaMeddelanden, land }),
       });
 
       if (res.status === 402) {
+        const { error } = await res.json().catch(() => ({ error: "" }));
         setMeddelanden([...nyaMeddelanden, {
           role: "assistant",
-          content: "AI-rådgivaren kräver Premium. [Uppgradera här](/premium) för 79 kr/mån — ett stipendium betalar det 200 gånger om.",
+          content: error
+            ? `${error} [Uppgradera här](/premium).`
+            : "AI-rådgivaren kräver Premium. [Uppgradera här](/premium) — ett stipendium betalar det 200 gånger om.",
         }]);
         setLaddar(false);
         return;
       }
       if (!res.body) throw new Error("Inget svar");
+
+      // Markera teaser som använd direkt när vi får ok svar (även innan stream är klar)
+      if (!premium) {
+        localStorage.setItem("stipendier_teaser_använd", "1");
+        setTeaserAnvänd(true);
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -143,6 +169,28 @@ export default function AiPage() {
           ← Sök manuellt
         </Link>
       </div>
+
+      {premiumLaddad && !premium && (
+        <div className="max-w-3xl w-full mx-auto px-4 pb-3">
+          <div className={`rounded-xl px-4 py-3 text-sm flex items-center justify-between gap-3 ${
+            teaserAnvänd
+              ? "bg-amber-50 border border-amber-200 text-amber-900"
+              : "bg-blue-50 border border-blue-200 text-blue-900"
+          }`}>
+            <span>
+              {teaserAnvänd
+                ? "🔒 Din gratisfråga är använd. Uppgradera för obegränsade AI-svar."
+                : "✨ Din första fråga är gratis — testa AI-rådgivaren innan du uppgraderar."}
+            </span>
+            <Link
+              href="/premium"
+              className="shrink-0 px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition"
+            >
+              Uppgradera →
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-3xl w-full mx-auto px-4 flex-1 flex flex-col gap-4 pb-4">
         {/* Chattfönster */}

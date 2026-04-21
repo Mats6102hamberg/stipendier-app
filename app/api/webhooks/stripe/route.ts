@@ -35,8 +35,13 @@ export async function POST(req: NextRequest) {
     const aktiv = subscription.status === "active" || subscription.status === "trialing";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const periodEnd = new Date((subscription as any).current_period_end * 1000);
-    const plan = subscription.items.data[0]?.price.id === process.env.STRIPE_PRICE_ID_YEARLY
-      ? "yearly" : "monthly";
+    const priceId = subscription.items.data[0]?.price.id;
+    const plan =
+      priceId === process.env.STRIPE_PRICE_ID_YEARLY
+        ? "yearly"
+        : priceId === process.env.STRIPE_PRICE_ID_QUARTERLY
+          ? "quarterly"
+          : "monthly";
 
     await prisma.subscriber.update({
       where: { id: subscriber.id },
